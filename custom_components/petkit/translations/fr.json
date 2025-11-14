@@ -91,7 +91,7 @@
           "name": "Réinitialiser le filtre"
         },
         "reset_desiccant": {
-          "name": "Réinitialiser le dessicant"
+          "name": "Réinitialiser le déshydratant"
         },
         "cancel_manual_feed": {
           "name": "Annuler l'alimentation manuelle"
@@ -242,7 +242,7 @@
           }
         },
         "desiccant_days_remaining": {
-          "name": "Jours restants de dessicant"
+          "name": "Jours restants de déshydratant"
         },
         "battery_status": {
           "name": "Statut de la batterie",
