@@ -69,6 +69,8 @@ async def async_setup_entry(
             FeederBattStatus(coordinator, feeder_id),
             FeederRSSI(coordinator, feeder_id),
             FeederError(coordinator, feeder_id),
+            FeederDesiccantTime(coordinator, feeder_id),
+            FeederRuntime(coordinator, feeder_id),
         ))
 
         # D3 & D4
@@ -92,6 +94,7 @@ async def async_setup_entry(
                 AmountEaten(coordinator, feeder_id),
                 TimesEaten(coordinator, feeder_id),
                 FoodInBowl(coordinator, feeder_id),
+                FeederFeedLimit(coordinator, feeder_id),
             ))
 
         # D4s Feeder
@@ -146,7 +149,11 @@ async def async_setup_entry(
         if lb_data.type == 't4':
             sensors.extend((
                 MAXLastEvent(coordinator, lb_id),
-                MAXWorkState(coordinator, lb_id)
+                MAXWorkState(coordinator, lb_id),
+                LBTimesEntered(coordinator, lb_id),
+                LBTotalTime(coordinator, lb_id),
+                LBLastOutTime(coordinator, lb_id),
+                LBMaintenanceTime(coordinator, lb_id),
             ))
 
     # Pets
@@ -1737,3 +1744,156 @@ class FoodLeft(PetKitFeederEntity, SensorEntity):
         """Return current percentage left"""
 
         return self.feeder_data.data['state']['percent']
+
+
+class LBTimesEntered(PetKitLitterBoxEntity, SensorEntity):
+    """Representation of number of times a pet entered the litter box today."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = 'mdi:counter'
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "times_entered")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return number of times entered today."""
+        return self.lb_data.device_detail.get('inTimes')
+
+    @property
+    def available(self) -> bool:
+        """Only available for T4."""
+        return 'inTimes' in self.lb_data.device_detail
+
+
+class LBTotalTime(PetKitLitterBoxEntity, SensorEntity):
+    """Representation of total time pet spent in litter box today."""
+
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = 'mdi:timer'
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "total_time_in_box")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return total seconds spent in box today."""
+        return self.lb_data.device_detail.get('totalTime')
+
+    @property
+    def available(self) -> bool:
+        """Only available for T4."""
+        return 'totalTime' in self.lb_data.device_detail
+
+
+class LBLastOutTime(PetKitLitterBoxEntity, SensorEntity):
+    """Representation of last session duration in litter box."""
+
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = 'mdi:timer-outline'
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "last_session_duration")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return last session duration in seconds."""
+        return self.lb_data.device_detail.get('lastOutTime')
+
+    @property
+    def available(self) -> bool:
+        """Only available for T4."""
+        return 'lastOutTime' in self.lb_data.device_detail
+
+
+class LBMaintenanceTime(PetKitLitterBoxEntity, SensorEntity):
+    """Representation of last maintenance timestamp."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:wrench-clock'
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "last_maintenance")
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return last maintenance time."""
+        ts = self.lb_data.device_detail.get('maintenanceTime')
+        if ts:
+            return datetime.fromtimestamp(ts)
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Only available for T4."""
+        return bool(self.lb_data.device_detail.get('maintenanceTime'))
+
+
+class FeederDesiccantTime(PetKitFeederEntity, SensorEntity):
+    """Representation of feeder desiccant replacement time."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:air-filter'
+
+    def __init__(self, coordinator, feeder_id):
+        super().__init__(coordinator, feeder_id, "desiccant_time")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return desiccant timer value."""
+        return self.feeder_data.data['state'].get('desiccantTime')
+
+    @property
+    def available(self) -> bool:
+        """Only available if desiccantTime exists."""
+        return 'desiccantTime' in self.feeder_data.data.get('state', {})
+
+
+class FeederRuntime(PetKitFeederEntity, SensorEntity):
+    """Representation of feeder total runtime."""
+
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:clock-outline'
+
+    def __init__(self, coordinator, feeder_id):
+        super().__init__(coordinator, feeder_id, "runtime")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return total runtime in seconds."""
+        return self.feeder_data.data['state'].get('runtime')
+
+    @property
+    def available(self) -> bool:
+        """Only available if runtime exists."""
+        return 'runtime' in self.feeder_data.data.get('state', {})
+
+
+class FeederFeedLimit(PetKitFeederEntity, SensorEntity):
+    """Representation of daily feed count limit."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:counter'
+
+    def __init__(self, coordinator, feeder_id):
+        super().__init__(coordinator, feeder_id, "feed_limit")
+
+    @property
+    def native_value(self) -> int:
+        """Return current feed limit."""
+        return self.feeder_data.data['settings'].get('numLimit', 5)
+
+    @property
+    def available(self) -> bool:
+        """Only available if numLimit exists."""
+        return 'numLimit' in self.feeder_data.data.get('settings', {})

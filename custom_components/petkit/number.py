@@ -61,6 +61,11 @@ async def async_setup_entry(
         numbers.append(
             LBCleaningDelay(coordinator, lb_id)
         )
+        # Pura MAX
+        if lb_data.type == 't4':
+            numbers.append(
+                LBStopTime(coordinator, lb_id)
+            )
 
     async_add_entities(numbers)
 
@@ -342,3 +347,36 @@ class FreshElementManualFeed(PetKitFeederEntity, NumberEntity):
         else:
             await self.coordinator.client.manual_feeding(self.feeder_data, int(value))
             await self.coordinator.async_request_refresh()
+
+
+class LBStopTime(PetKitLitterBoxEntity, NumberEntity):
+    """Representation of litter box emergency stop timeout."""
+
+    _attr_native_min_value = 60
+    _attr_native_max_value = 900
+    _attr_native_step = 60
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_mode = NumberMode.SLIDER
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = 'mdi:timer-stop'
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "stop_time")
+
+    @property
+    def native_value(self) -> int:
+        """Return current stop time."""
+        return self.lb_data.device_detail['settings'].get('stopTime', 600)
+
+    @property
+    def available(self) -> bool:
+        """Only make available if device is online."""
+        return self.lb_data.device_detail['state']['pim'] != 0
+
+    async def async_set_native_value(self, value: int) -> None:
+        """Update the current value."""
+
+        await self.coordinator.client.update_litter_box_settings(self.lb_data, LitterBoxSetting.STOP_TIME, int(value))
+        self.lb_data.device_detail['settings']['stopTime'] = int(value)
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()

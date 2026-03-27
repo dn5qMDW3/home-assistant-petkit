@@ -53,6 +53,20 @@ async def async_setup_entry(
                 BatteryCharging(coordinator, feeder_id)
             )
 
+        # D3 & D4 common binary sensors
+        if feeder_data.type in ['d3', 'd4']:
+            binary_sensors.extend((
+                FeederDoor(coordinator, feeder_id),
+                FeederFeeding(coordinator, feeder_id),
+            ))
+
+        # D3 only
+        if feeder_data.type == 'd3':
+            binary_sensors.extend((
+                FeederEating(coordinator, feeder_id),
+                FeederBlock(coordinator, feeder_id),
+            ))
+
     # Litter boxes
     for lb_id, lb_data in coordinator.data.litter_boxes.items():
         # Pura X & Pura MAX
@@ -71,6 +85,13 @@ async def async_setup_entry(
             binary_sensors.append(
                 LBManuallyPaused(coordinator, lb_id)
             )
+
+        # Pura MAX
+        if lb_data.type == 't4':
+            binary_sensors.extend((
+                LBLowPower(coordinator, lb_id),
+                LBFrequentRestroom(coordinator, lb_id),
+            ))
 
     async_add_entities(binary_sensors)
 
@@ -311,3 +332,113 @@ class FoodLevelHopper2(PetKitFeederEntity, BinarySensorEntity):
             return 'mdi:food-drumstick-off'
         else:
             return 'mdi:food-drumstick'
+
+
+class FeederDoor(PetKitFeederEntity, BinarySensorEntity):
+    """Representation of feeder door state."""
+
+    _attr_device_class = BinarySensorDeviceClass.DOOR
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, feeder_id):
+        super().__init__(coordinator, feeder_id, "door")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if door is open."""
+        return self.feeder_data.data['state'].get('door', 0) == 1
+
+    @property
+    def available(self) -> bool:
+        """Only available if door key exists."""
+        return 'door' in self.feeder_data.data.get('state', {})
+
+
+class FeederFeeding(PetKitFeederEntity, BinarySensorEntity):
+    """Representation of feeder currently dispensing food."""
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = 'mdi:food-drumstick'
+
+    def __init__(self, coordinator, feeder_id):
+        super().__init__(coordinator, feeder_id, "feeding")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if currently feeding."""
+        return self.feeder_data.data['state'].get('feeding', 0) == 1
+
+    @property
+    def available(self) -> bool:
+        """Only available if feeding key exists."""
+        return 'feeding' in self.feeder_data.data.get('state', {})
+
+
+class FeederEating(PetKitFeederEntity, BinarySensorEntity):
+    """Representation of pet currently eating."""
+
+    _attr_icon = 'mdi:cat'
+
+    def __init__(self, coordinator, feeder_id):
+        super().__init__(coordinator, feeder_id, "eating")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if pet is currently eating."""
+        return self.feeder_data.data['state'].get('eating', 0) == 1
+
+    @property
+    def available(self) -> bool:
+        """Only available for D3."""
+        return 'eating' in self.feeder_data.data.get('state', {})
+
+
+class FeederBlock(PetKitFeederEntity, BinarySensorEntity):
+    """Representation of feeder mechanical block."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = 'mdi:alert-circle'
+
+    def __init__(self, coordinator, feeder_id):
+        super().__init__(coordinator, feeder_id, "block")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if feeder is blocked."""
+        return self.feeder_data.data['state'].get('block', 0) == 1
+
+    @property
+    def available(self) -> bool:
+        """Only available for D3."""
+        return 'block' in self.feeder_data.data.get('state', {})
+
+
+class LBLowPower(PetKitLitterBoxEntity, BinarySensorEntity):
+    """Representation of litter box low power warning."""
+
+    _attr_device_class = BinarySensorDeviceClass.BATTERY
+    _attr_icon = 'mdi:battery-low'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "low_power")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if power is low."""
+        return bool(self.lb_data.device_detail['state'].get('lowPower', False))
+
+
+class LBFrequentRestroom(PetKitLitterBoxEntity, BinarySensorEntity):
+    """Representation of frequent restroom detection - potential health issue."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = 'mdi:alert-circle'
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "frequent_restroom")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if frequent restroom is detected."""
+        return bool(self.lb_data.device_detail['state'].get('frequentRestroom', False))

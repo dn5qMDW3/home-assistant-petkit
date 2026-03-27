@@ -84,7 +84,8 @@ async def async_setup_entry(
             switches.extend((
                 LBContRotation(coordinator, lb_id),
                 LBDeepCleaning(coordinator, lb_id),
-                LBEnhancedAdsorption(coordinator, lb_id)
+                LBEnhancedAdsorption(coordinator, lb_id),
+                LBSoftMode(coordinator, lb_id)
             ))
             # Pura MAX with Pura Air
             if 'k3Device' in lb_data.device_detail:
@@ -1434,5 +1435,43 @@ class LBEnhancedAdsorption(PetKitLitterBoxEntity, SwitchEntity):
         await self.coordinator.client.update_litter_box_settings(self.lb_data, LitterBoxSetting.ENHANCED_ADSORPTION, 0)
 
         self.lb_data.device_detail['settings']['bury'] = 0
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+
+class LBSoftMode(PetKitLitterBoxEntity, SwitchEntity):
+    """Representation of litter box soft/quiet mode."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = 'mdi:volume-low'
+
+    def __init__(self, coordinator, lb_id):
+        super().__init__(coordinator, lb_id, "soft_mode")
+
+    @property
+    def is_on(self) -> bool:
+        """Determine if soft mode is on."""
+        return self.lb_data.device_detail['settings']['softMode'] == 1
+
+    @property
+    def available(self) -> bool:
+        """Only make available if device is online."""
+        return self.lb_data.device_detail['state']['pim'] != 0
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Turn soft mode on."""
+
+        await self.coordinator.client.update_litter_box_settings(self.lb_data, LitterBoxSetting.SOFT_MODE, 1)
+
+        self.lb_data.device_detail['settings']['softMode'] = 1
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Turn soft mode off."""
+
+        await self.coordinator.client.update_litter_box_settings(self.lb_data, LitterBoxSetting.SOFT_MODE, 0)
+
+        self.lb_data.device_detail['settings']['softMode'] = 0
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

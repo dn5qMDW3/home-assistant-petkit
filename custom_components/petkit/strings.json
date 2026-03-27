@@ -84,6 +84,24 @@
       },
       "food_level_hopper_two": {
         "name": "Food level hopper 2"
+      },
+      "door": {
+        "name": "Door"
+      },
+      "feeding": {
+        "name": "Feeding"
+      },
+      "eating": {
+        "name": "Eating"
+      },
+      "block": {
+        "name": "Blockage"
+      },
+      "low_power": {
+        "name": "Low power"
+      },
+      "frequent_restroom": {
+        "name": "Frequent restroom"
       }
     },
     "button": {
@@ -184,6 +202,9 @@
       },
       "min_eating_duration": {
         "name": "Minimum eating duration"
+      },
+      "stop_time": {
+        "name": "Emergency stop timeout"
       }
     },
     "select": {
@@ -670,6 +691,27 @@
       },
       "food_left": {
         "name": "Food left"
+      },
+      "times_entered": {
+        "name": "Times entered"
+      },
+      "total_time_in_box": {
+        "name": "Total time in box"
+      },
+      "last_session_duration": {
+        "name": "Last session duration"
+      },
+      "last_maintenance": {
+        "name": "Last maintenance"
+      },
+      "desiccant_time": {
+        "name": "Desiccant timer"
+      },
+      "runtime": {
+        "name": "Runtime"
+      },
+      "feed_limit": {
+        "name": "Feed limit"
       }
     },
     "switch": {
@@ -741,6 +783,9 @@
       },
       "enhanced_adsorption": {
         "name": "Enhanced adsorption"
+      },
+      "soft_mode": {
+        "name": "Soft mode"
       }
     },
     "text": {
