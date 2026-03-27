@@ -13,6 +13,9 @@ venv/
 # IDE - PyCharm / JetBrains
 .idea/
 
+# Claude Code
+.claude/
+
 # macOS
 .DS_Store
 .AppleDouble
