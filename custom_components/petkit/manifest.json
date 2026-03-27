@@ -14,7 +14,7 @@
     "petkitaio"
   ],
   "requirements": [
-    "petkitaio==0.1.12",
+    "petkitaio @ git+https://github.com/dn5qMDW3/petkitaio.git@fix/critical-bugs",
     "tzlocal==5.1"
   ],
   "version": "0.1.14"

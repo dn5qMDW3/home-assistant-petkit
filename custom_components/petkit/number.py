@@ -1,11 +1,8 @@
 """Number platform for PetKit integration."""
 from __future__ import annotations
 
-from typing import Any
-
 from petkitaio.constants import FeederSetting, LitterBoxSetting, PetSetting
 from petkitaio.exceptions import PetKitError
-from petkitaio.model import Feeder, LitterBox, Pet
 
 from homeassistant.components.number import (
     NumberDeviceClass,
@@ -17,11 +14,10 @@ from homeassistant.const import UnitOfMass, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util.unit_system import METRIC_SYSTEM
 
-from .const import DOMAIN, FEEDERS, LITTER_BOXES, PETKIT_COORDINATOR
 from .coordinator import PetKitDataUpdateCoordinator
+from .entity import PetKitFeederEntity, PetKitLitterBoxEntity, PetKitPetEntity
 
 
 async def async_setup_entry(
@@ -29,7 +25,7 @@ async def async_setup_entry(
 ) -> None:
     """Set Up PetKit Number Entities."""
 
-    coordinator: PetKitDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][PETKIT_COORDINATOR]
+    coordinator: PetKitDataUpdateCoordinator = entry.runtime_data
 
     numbers = []
 
@@ -69,47 +65,15 @@ async def async_setup_entry(
     async_add_entities(numbers)
 
 
-class PetWeight(CoordinatorEntity, NumberEntity):
+class PetWeight(PetKitPetEntity, NumberEntity):
     """Representation of Pet Weight."""
 
+    _attr_device_class = NumberDeviceClass.WEIGHT
+    _attr_mode = NumberMode.BOX
+    _attr_native_step = 0.1
+
     def __init__(self, coordinator, pet_id):
-        super().__init__(coordinator)
-        self.pet_id = pet_id
-
-    @property
-    def pet_data(self) -> Pet:
-        """Handle coordinator Pet data."""
-
-        return self.coordinator.data.pets[self.pet_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.pet_data.id)},
-            "name": self.pet_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": self.pet_data.type,
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return self.pet_data.id + '_set_weight'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "set_weight"
+        super().__init__(coordinator, pet_id, "set_weight")
 
     @property
     def entity_picture(self) -> str:
@@ -117,8 +81,7 @@ class PetWeight(CoordinatorEntity, NumberEntity):
 
         if 'avatar' in self.pet_data.data:
             return self.pet_data.data['avatar']
-        else:
-            return None
+        return None
 
     @property
     def icon(self) -> str:
@@ -126,8 +89,7 @@ class PetWeight(CoordinatorEntity, NumberEntity):
 
         if 'avatar' in self.pet_data.data:
             return None
-        else:
-            return 'mdi:weight'
+        return 'mdi:weight'
 
     @property
     def native_value(self) -> float:
@@ -136,8 +98,7 @@ class PetWeight(CoordinatorEntity, NumberEntity):
         pet_weight = self.pet_data.data['weight']
         if self.hass.config.units is METRIC_SYSTEM:
             return pet_weight
-        else:
-            return round((pet_weight * 2.2046226), 1)
+        return round((pet_weight * 2.2046226), 1)
 
     @property
     def native_unit_of_measurement(self) -> UnitOfMass:
@@ -145,20 +106,7 @@ class PetWeight(CoordinatorEntity, NumberEntity):
 
         if self.hass.config.units is METRIC_SYSTEM:
             return UnitOfMass.KILOGRAMS
-        else:
-            return UnitOfMass.POUNDS
-
-    @property
-    def device_class(self) -> NumberDeviceClass:
-        """Return weight device class."""
-
-        return NumberDeviceClass.WEIGHT
-
-    @property
-    def mode(self) -> NumberMode:
-        """Return box mode."""
-
-        return NumberMode.BOX
+        return UnitOfMass.POUNDS
 
     @property
     def native_min_value(self) -> float:
@@ -166,8 +114,7 @@ class PetWeight(CoordinatorEntity, NumberEntity):
 
         if self.hass.config.units is METRIC_SYSTEM:
             return 1.0
-        else:
-            return 2.2
+        return 2.2
 
     @property
     def native_max_value(self) -> float:
@@ -175,14 +122,7 @@ class PetWeight(CoordinatorEntity, NumberEntity):
 
         if self.hass.config.units is METRIC_SYSTEM:
             return 150.0
-        else:
-            return 330.0
-
-    @property
-    def native_step(self) -> int:
-        """Return stepping by 10 grams."""
-
-        return 0.1
+        return 330.0
 
     async def async_set_native_value(self, value: int) -> None:
         """Update the current value."""
@@ -196,60 +136,20 @@ class PetWeight(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
 
-class Surplus(CoordinatorEntity, NumberEntity):
+class Surplus(PetKitFeederEntity, NumberEntity):
     """Representation of D3 Feeder surplus amount."""
 
+    _attr_icon = 'mdi:food-drumstick'
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_device_class = NumberDeviceClass.WEIGHT
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 20
+    _attr_native_max_value = 100
+    _attr_native_step = 10
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_surplus'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "surplus"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
+        super().__init__(coordinator, feeder_id, "surplus")
 
     @property
     def native_value(self) -> int:
@@ -258,49 +158,10 @@ class Surplus(CoordinatorEntity, NumberEntity):
         return self.feeder_data.data['settings']['surplus']
 
     @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams."""
-
-        return UnitOfMass.GRAMS
-
-    @property
-    def device_class(self) -> NumberDeviceClass:
-        """Return weight device class."""
-
-        return NumberDeviceClass.WEIGHT
-
-    @property
-    def mode(self) -> NumberMode:
-        """Return slider mode."""
-
-        return NumberMode.SLIDER
-
-    @property
-    def native_min_value(self) -> int:
-        """Return minimum allowed value."""
-
-        return 20
-
-    @property
-    def native_max_value(self) -> int:
-        """Return max value allowed."""
-
-        return 100
-
-    @property
-    def native_step(self) -> int:
-        """Return stepping by 10 grams."""
-
-        return 10
-
-    @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] != 0
 
     async def async_set_native_value(self, value: int) -> None:
         """Update the current value."""
@@ -311,60 +172,18 @@ class Surplus(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
 
-class Volume(CoordinatorEntity, NumberEntity):
+class Volume(PetKitFeederEntity, NumberEntity):
     """Representation of D3 Feeder speaker volume."""
 
+    _attr_icon = 'mdi:volume-high'
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 1
+    _attr_native_max_value = 9
+    _attr_native_step = 1
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_volume'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "volume"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:volume-high'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
+        super().__init__(coordinator, feeder_id, "volume")
 
     @property
     def native_value(self) -> int:
@@ -373,37 +192,10 @@ class Volume(CoordinatorEntity, NumberEntity):
         return self.feeder_data.data['settings']['volume']
 
     @property
-    def mode(self) -> NumberMode:
-        """Return slider mode."""
-
-        return NumberMode.SLIDER
-
-    @property
-    def native_min_value(self) -> int:
-        """Return minimum allowed value."""
-
-        return 1
-
-    @property
-    def native_max_value(self) -> int:
-        """Return max value allowed."""
-
-        return 9
-
-    @property
-    def native_step(self) -> int:
-        """Return stepping by 1."""
-
-        return 1
-
-    @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] != 0
 
     async def async_set_native_value(self, value: int) -> None:
         """Update the current value."""
@@ -414,105 +206,26 @@ class Volume(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
 
-class ManualFeed(CoordinatorEntity, NumberEntity):
+class ManualFeed(PetKitFeederEntity, NumberEntity):
     """Representation of D3 Feeder manual feeding."""
 
+    _attr_icon = 'mdi:bowl-mix'
+    _attr_native_value = 4
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_device_class = NumberDeviceClass.WEIGHT
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 4
+    _attr_native_max_value = 200
+    _attr_native_step = 1
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_manual_feed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "manual_feed"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:bowl-mix'
-
-    @property
-    def native_value(self) -> int:
-        """Returns lowest amount allowed."""
-
-        return 4
-
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams."""
-
-        return UnitOfMass.GRAMS
-
-    @property
-    def device_class(self) -> NumberDeviceClass:
-        """Return weight device class."""
-
-        return NumberDeviceClass.WEIGHT
-
-    @property
-    def mode(self) -> NumberMode:
-        """Return slider mode."""
-
-        return NumberMode.SLIDER
-
-    @property
-    def native_min_value(self) -> int:
-        """Return minimum allowed value."""
-
-        return 4
-
-    @property
-    def native_max_value(self) -> int:
-        """Return max value allowed."""
-
-        return 200
-
-    @property
-    def native_step(self) -> int:
-        """Return stepping by 1."""
-
-        return 1
+        super().__init__(coordinator, feeder_id, "manual_feed")
 
     @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] != 0
 
     async def async_set_native_value(self, value: int) -> None:
         """Update the current value."""
@@ -524,96 +237,25 @@ class ManualFeed(CoordinatorEntity, NumberEntity):
             await self.coordinator.async_request_refresh()
 
 
-class LBCleaningDelay(CoordinatorEntity, NumberEntity):
+class LBCleaningDelay(PetKitLitterBoxEntity, NumberEntity):
     """Representation of litter box cleaning delay."""
 
+    _attr_icon = 'mdi:motion-pause'
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 0
+    _attr_native_max_value = 60
+    _attr_native_step = 1
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_cleaning_delay'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "cleaning_delay"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:motion-pause'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
+        super().__init__(coordinator, lb_id, "cleaning_delay")
 
     @property
     def native_value(self) -> int:
         """Returns currently set delay in minutes."""
 
         return (self.lb_data.device_detail['settings']['stillTime'] / 60)
-
-    @property
-    def native_unit_of_measurement(self) -> UnitOfTime:
-        """Return minutes."""
-
-        return UnitOfTime.MINUTES
-
-    @property
-    def mode(self) -> NumberMode:
-        """Return slider mode."""
-
-        return NumberMode.SLIDER
-
-    @property
-    def native_min_value(self) -> int:
-        """Return minimum allowed value."""
-
-        return 0
-
-    @property
-    def native_max_value(self) -> int:
-        """Return max value allowed."""
-
-        return 60
-
-    @property
-    def native_step(self) -> int:
-        """Return stepping by 1."""
-
-        return 1
 
     @property
     def available(self) -> bool:
@@ -623,13 +265,8 @@ class LBCleaningDelay(CoordinatorEntity, NumberEntity):
         auto_clean = self.lb_data.device_detail['settings']['autoWork'] == 1
 
         if self.lb_data.device_detail['state']['pim'] != 0:
-            # Only available if kitten mode off and auto cleaning on
-            if (kitten_mode_off and auto_clean):
-                return True
-            else:
-                return False
-        else:
-            return False
+            return kitten_mode_off and auto_clean
+        return False
 
     async def async_set_native_value(self, value: int) -> None:
         """Update the current value."""
@@ -641,60 +278,19 @@ class LBCleaningDelay(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
 
-class MinEatingDuration(CoordinatorEntity, NumberEntity):
+class MinEatingDuration(PetKitFeederEntity, NumberEntity):
     """Representation of D4s shortest eating duration."""
 
+    _attr_icon = 'mdi:clock-digital'
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 3
+    _attr_native_max_value = 60
+    _attr_native_step = 1
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_min_eating_duration'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "min_eating_duration"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:clock-digital'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
+        super().__init__(coordinator, feeder_id, "min_eating_duration")
 
     @property
     def native_value(self) -> int:
@@ -703,43 +299,10 @@ class MinEatingDuration(CoordinatorEntity, NumberEntity):
         return self.feeder_data.data['settings']['shortest']
 
     @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return seconds."""
-
-        return UnitOfTime.SECONDS
-
-    @property
-    def mode(self) -> NumberMode:
-        """Return slider mode."""
-
-        return NumberMode.SLIDER
-
-    @property
-    def native_min_value(self) -> int:
-        """Return minimum allowed value."""
-
-        return 3
-
-    @property
-    def native_max_value(self) -> int:
-        """Return max value allowed."""
-
-        return 60
-
-    @property
-    def native_step(self) -> int:
-        """Return stepping by 1 second."""
-
-        return 1
-
-    @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] != 0
 
     async def async_set_native_value(self, value: int) -> None:
         """Update the current value."""
@@ -750,105 +313,26 @@ class MinEatingDuration(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
 
-class FreshElementManualFeed(CoordinatorEntity, NumberEntity):
+class FreshElementManualFeed(PetKitFeederEntity, NumberEntity):
     """Representation of Fresh Element feeder manual feeding."""
 
+    _attr_icon = 'mdi:bowl-mix'
+    _attr_native_value = 0
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_device_class = NumberDeviceClass.WEIGHT
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 0
+    _attr_native_max_value = 400
+    _attr_native_step = 20
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_manual_feed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "manual_feed"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:bowl-mix'
-
-    @property
-    def native_value(self) -> int:
-        """Returns lowest amount allowed."""
-
-        return 0
-
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams."""
-
-        return UnitOfMass.GRAMS
-
-    @property
-    def device_class(self) -> NumberDeviceClass:
-        """Return weight device class."""
-
-        return NumberDeviceClass.WEIGHT
-
-    @property
-    def mode(self) -> NumberMode:
-        """Return slider mode."""
-
-        return NumberMode.SLIDER
-
-    @property
-    def native_min_value(self) -> int:
-        """Return minimum allowed value."""
-
-        return 0
-
-    @property
-    def native_max_value(self) -> int:
-        """Return max value allowed."""
-
-        return 400
-
-    @property
-    def native_step(self) -> int:
-        """Return stepping by 1."""
-
-        return 20
+        super().__init__(coordinator, feeder_id, "manual_feed")
 
     @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] != 0
 
     async def async_set_native_value(self, value: int) -> None:
         """Update the current value."""

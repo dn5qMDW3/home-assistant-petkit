@@ -1,12 +1,10 @@
 """Select platform for PetKit integration."""
 from __future__ import annotations
 
-from typing import Any
 import asyncio
 
-from petkitaio.constants import FeederSetting, LitterBoxSetting, W5Command
+from petkitaio.constants import FeederSetting, LitterBoxSetting
 from petkitaio.exceptions import BluetoothError
-from petkitaio.model import Feeder, LitterBox, W5Fountain
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
@@ -14,27 +12,22 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import(
+from .const import (
     CLEANING_INTERVAL_NAMED,
-    DOMAIN,
-    FEEDERS,
     FEEDER_MANUAL_FEED_OPTIONS,
     LIGHT_BRIGHTNESS_COMMAND,
     LIGHT_BRIGHTNESS_NAMED,
     LIGHT_BRIGHTNESS_OPTIONS,
-    LITTER_BOXES,
     LITTER_TYPE_NAMED,
     MANUAL_FEED_NAMED,
     MINI_FEEDER_MANUAL_FEED_OPTIONS,
-    PETKIT_COORDINATOR,
-    WATER_FOUNTAINS,
     WF_MODE_COMMAND,
     WF_MODE_NAMED,
     WF_MODE_OPTIONS,
 )
 from .coordinator import PetKitDataUpdateCoordinator
+from .entity import PetKitFeederEntity, PetKitLitterBoxEntity, PetKitWaterFountainEntity
 from .exceptions import PetKitBluetoothError
 
 LIGHT_BRIGHTNESS_TO_PETKIT = {v: k for (k, v) in LIGHT_BRIGHTNESS_COMMAND.items()}
@@ -51,7 +44,7 @@ async def async_setup_entry(
 ) -> None:
     """Set Up PetKit Select Entities."""
 
-    coordinator: PetKitDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][PETKIT_COORDINATOR]
+    coordinator: PetKitDataUpdateCoordinator = entry.runtime_data
 
     selects = []
 
@@ -83,48 +76,13 @@ async def async_setup_entry(
 
     async_add_entities(selects)
 
-class WFLightBrightness(CoordinatorEntity, SelectEntity):
+class WFLightBrightness(PetKitWaterFountainEntity, SelectEntity):
     """Representation of Water Fountain Light Brightness level."""
 
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(self, coordinator, wf_id):
-        super().__init__(coordinator)
-        self.wf_id = wf_id
-
-    @property
-    def wf_data(self) -> W5Fountain:
-        """Handle coordinator Water Fountain data."""
-
-        return self.coordinator.data.water_fountains[self.wf_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.wf_data.id)},
-            "name": self.wf_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": WATER_FOUNTAINS.get(self.wf_data.data["typeCode"], "Unidentified Water Fountain") if "typeCode" in self.wf_data.data else "Unidentified Water Fountain",
-            "sw_version": f'{self.wf_data.data["hardware"]}.{self.wf_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.wf_data.id) + '_light_brightness'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "light_brightness"
+        super().__init__(coordinator, wf_id, "light_brightness")
 
     @property
     def icon(self) -> str:
@@ -136,14 +94,7 @@ class WFLightBrightness(CoordinatorEntity, SelectEntity):
             return 'mdi:lightbulb-on-30'
         if brightness == 2:
             return 'mdi:lightbulb-on-50'
-        else:
-            return 'mdi:lightbulb-on'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
+        return 'mdi:lightbulb-on'
 
     @property
     def available(self) -> bool:
@@ -152,10 +103,7 @@ class WFLightBrightness(CoordinatorEntity, SelectEntity):
         Return true if light is on
         """
 
-        if self.wf_data.data['settings']['lampRingSwitch'] == 1:
-            return True
-        else:
-            return False
+        return self.wf_data.data['settings']['lampRingSwitch'] == 1
 
     @property
     def current_option(self) -> str:
@@ -193,48 +141,13 @@ class WFLightBrightness(CoordinatorEntity, SelectEntity):
             await asyncio.sleep(1)
             await self.coordinator.async_request_refresh()
 
-class WFMode(CoordinatorEntity, SelectEntity):
+class WFMode(PetKitWaterFountainEntity, SelectEntity):
     """Representation of Water Fountain mode."""
 
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(self, coordinator, wf_id):
-        super().__init__(coordinator)
-        self.wf_id = wf_id
-
-    @property
-    def wf_data(self) -> W5Fountain:
-        """Handle coordinator Water Fountain data."""
-
-        return self.coordinator.data.water_fountains[self.wf_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.wf_data.id)},
-            "name": self.wf_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": WATER_FOUNTAINS.get(self.wf_data.data["typeCode"], "Unidentified Water Fountain") if "typeCode" in self.wf_data.data else "Unidentified Water Fountain",
-            "sw_version": f'{self.wf_data.data["hardware"]}.{self.wf_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.wf_data.id) + '_mode'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "mode"
+        super().__init__(coordinator, wf_id, "mode")
 
     @property
     def icon(self) -> str:
@@ -248,17 +161,10 @@ class WFMode(CoordinatorEntity, SelectEntity):
             return 'mdi:brain'
 
     @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
-
-    @property
     def available(self) -> bool:
         """Determine if device is available."""
-        
-        return True
 
+        return True
 
     @property
     def current_option(self) -> str:
@@ -296,63 +202,19 @@ class WFMode(CoordinatorEntity, SelectEntity):
             await asyncio.sleep(1)
             await self.coordinator.async_request_refresh()
 
-class ManualFeed(CoordinatorEntity, SelectEntity):
+class ManualFeed(PetKitFeederEntity, SelectEntity):
     """Representation of manual feeding amount selector."""
 
+    _attr_icon = 'mdi:bowl-mix'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_manual_feed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "manual_feed"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:bowl-mix'
+        super().__init__(coordinator, feeder_id, "manual_feed")
 
     @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] != 0
 
     @property
     def current_option(self) -> str:
@@ -378,69 +240,20 @@ class ManualFeed(CoordinatorEntity, SelectEntity):
         await self.coordinator.async_request_refresh()
 
 
-class Sound(CoordinatorEntity, SelectEntity):
+class Sound(PetKitFeederEntity, SelectEntity):
     """Representation of D3 Sound selection."""
 
+    _attr_icon = 'mdi:surround-sound'
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_sound'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "sound"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:surround-sound'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
+        super().__init__(coordinator, feeder_id, "sound")
 
     @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] != 0
 
     @property
     def current_option(self) -> str:
@@ -471,48 +284,13 @@ class Sound(CoordinatorEntity, SelectEntity):
         await self.coordinator.async_request_refresh()
 
 
-class LBCleaningInterval(CoordinatorEntity, SelectEntity):
+class LBCleaningInterval(PetKitLitterBoxEntity, SelectEntity):
     """Representation of litter box cleaning interval."""
 
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_cleaning_interval'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "cleaning_interval"
+        super().__init__(coordinator, lb_id, "cleaning_interval")
 
     @property
     def icon(self) -> str:
@@ -524,12 +302,6 @@ class LBCleaningInterval(CoordinatorEntity, SelectEntity):
             return 'mdi:timer'
 
     @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
-
-    @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
@@ -538,13 +310,8 @@ class LBCleaningInterval(CoordinatorEntity, SelectEntity):
         avoid_repeat = self.lb_data.device_detail['settings']['avoidRepeat'] == 1
 
         if self.lb_data.device_detail['state']['pim'] != 0:
-            # Only available if kitten mode is off and auto clean and avoid repeat are on
-            if (kitten_mode_off and auto_clean and avoid_repeat):
-                return True
-            else:
-                return False
-        else:
-            return False
+            return kitten_mode_off and auto_clean and avoid_repeat
+        return False
 
     @property
     def current_option(self) -> str:
@@ -570,69 +337,20 @@ class LBCleaningInterval(CoordinatorEntity, SelectEntity):
         await self.coordinator.async_request_refresh()
 
 
-class LBLitterType(CoordinatorEntity, SelectEntity):
+class LBLitterType(PetKitLitterBoxEntity, SelectEntity):
     """Representation of litter box litter type."""
 
+    _attr_icon = 'mdi:grain'
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_litter_type'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "litter_type"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:grain'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to config."""
-
-        return EntityCategory.CONFIG
+        super().__init__(coordinator, lb_id, "litter_type")
 
     @property
     def available(self) -> bool:
         """Only make available if device is online."""
 
-        if self.lb_data.device_detail['state']['pim'] != 0:
-            return True
-        else:
-            return False
+        return self.lb_data.device_detail['state']['pim'] != 0
 
     @property
     def current_option(self) -> str:

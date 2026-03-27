@@ -1,20 +1,13 @@
 """Text platform for PetKit integration."""
 from __future__ import annotations
 
-from petkitaio.model import Feeder
-
 from homeassistant.components.text import TextEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    DOMAIN,
-    FEEDERS,
-    PETKIT_COORDINATOR
-)
 from .coordinator import PetKitDataUpdateCoordinator
+from .entity import PetKitFeederEntity
 
 
 async def async_setup_entry(
@@ -22,7 +15,7 @@ async def async_setup_entry(
 ) -> None:
     """Set Up PetKit Text Entities."""
 
-    coordinator: PetKitDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][PETKIT_COORDINATOR]
+    coordinator: PetKitDataUpdateCoordinator = entry.runtime_data
 
     text_entities = []
 
@@ -35,86 +28,29 @@ async def async_setup_entry(
             )
     async_add_entities(text_entities)
 
-class ManualFeed(CoordinatorEntity, TextEntity):
+class ManualFeed(PetKitFeederEntity, TextEntity):
     """Representation of manual feeding amount selector."""
 
+    _attr_icon = 'mdi:bowl-mix'
+    _attr_native_max = 5
+    _attr_native_min = 3
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_manual_feed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "manual_feed"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:bowl-mix'
+        super().__init__(coordinator, feeder_id, "manual_feed")
 
     @property
     def available(self) -> bool:
         """Only make available if device is online."""
-
-        if self.feeder_data.data['state']['pim'] != 0:
-            return True
-        else:
-            return False
-
-    @property
-    def native_max(self) -> int:
-        """Max number of characters."""
-
-        return 5
-
-    @property
-    def native_min(self) -> int:
-        """Min number of characters."""
-
-        return 3
+        return self.feeder_data.data['state']['pim'] != 0
 
     @property
     def pattern(self) -> str:
         """Check validity with regex pattern."""
-
         return "^([0-9]|10),([0-9]|10)$"
 
     @property
     def native_value(self) -> str:
         """Always reset to 0,0"""
-
         return "0,0"
 
     async def async_set_value(self, value: str) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import json
+import logging
 
 from petkitaio import PetKitClient
 from petkitaio.exceptions import AuthError, PetKitError, RegionError, ServerError
@@ -64,14 +65,18 @@ class PetKitDataUpdateCoordinator(DataUpdateCoordinator):
 
         try:
             data = await self.client.get_petkit_data()
-            nl = '\n'
-            LOGGER.debug(f'Found the following PetKit devices/pets: {nl}{json.dumps(data, default=vars, indent=4)}')
-        except TypeError:
-            LOGGER.debug('Encountered TypeError while formatting returned PetKit devices for logging.')
-            return data
         except (AuthError, RegionError) as error:
             raise ConfigEntryAuthFailed(error) from error
         except (ServerError, PetKitError) as error:
             raise UpdateFailed(error) from error
-        else:
-            return data
+
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            try:
+                LOGGER.debug(
+                    "Found the following PetKit devices/pets:\n%s",
+                    json.dumps(data, default=vars, indent=4),
+                )
+            except TypeError:
+                LOGGER.debug("Could not format PetKit device data for logging")
+
+        return data

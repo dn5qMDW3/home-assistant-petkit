@@ -1,19 +1,14 @@
 """Binary Sensor platform for PetKit integration."""
 from __future__ import annotations
 
-from typing import Any
-
-from petkitaio.model import Feeder, LitterBox, W5Fountain
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, FEEDERS, LITTER_BOXES, PETKIT_COORDINATOR, WATER_FOUNTAINS
 from .coordinator import PetKitDataUpdateCoordinator
+from .entity import PetKitFeederEntity, PetKitLitterBoxEntity, PetKitWaterFountainEntity
 
 
 async def async_setup_entry(
@@ -21,7 +16,7 @@ async def async_setup_entry(
 ) -> None:
     """Set Up PetKit Binary Sensor Entities."""
 
-    coordinator: PetKitDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][PETKIT_COORDINATOR]
+    coordinator: PetKitDataUpdateCoordinator = entry.runtime_data
 
     binary_sensors = []
 
@@ -80,456 +75,140 @@ async def async_setup_entry(
     async_add_entities(binary_sensors)
 
 
-class WFWater(CoordinatorEntity, BinarySensorEntity):
+class WFWater(PetKitWaterFountainEntity, BinarySensorEntity):
     """Representation of Water Fountain lack of water warning."""
 
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     def __init__(self, coordinator, wf_id):
-        super().__init__(coordinator)
-        self.wf_id = wf_id
-
-    @property
-    def wf_data(self) -> W5Fountain:
-        """Handle coordinator Water Fountain data"""
-
-        return self.coordinator.data.water_fountains[self.wf_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.wf_data.id)},
-            "name": self.wf_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": WATER_FOUNTAINS.get(self.wf_data.data["typeCode"], "Unidentified Water Fountain") if "typeCode" in self.wf_data.data else "Unidentified Water Fountain",
-            "sw_version": f'{self.wf_data.data["hardware"]}.{self.wf_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.wf_data.id) + '_water_level'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "water_level"
-
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.PROBLEM
+        super().__init__(coordinator, wf_id, "water_level")
 
     @property
     def is_on(self) -> bool:
         """Return True if water needs to be added."""
-
-        if self.wf_data.data['lackWarning'] == 1:
-            return True
-        else:
-            return False
+        return self.wf_data.data['lackWarning'] == 1
 
     @property
     def icon(self) -> str:
         """Set icon."""
-
         if self.wf_data.data['lackWarning'] == 1:
             return 'mdi:water-alert'
         else:
             return 'mdi:water'
 
-class FoodLevel(CoordinatorEntity, BinarySensorEntity):
+
+class FoodLevel(PetKitFeederEntity, BinarySensorEntity):
     """Representation of Feeder lack of food warning."""
 
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_food_level'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "food_level"
-
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.PROBLEM
+        super().__init__(coordinator, feeder_id, "food_level")
 
     @property
     def is_on(self) -> bool:
         """Return True if food needs to be added."""
-
         if self.feeder_data.type == 'd3':
-            if self.feeder_data.data['state']['food'] < 2:
-                return True
-            else:
-                return False
-
-        if self.feeder_data.type != 'd3':
-            # The food key for the Fresh Element represents grams left
-            if self.feeder_data.data['state']['food'] == 0:
-                return True
-            else:
-                return False
+            return self.feeder_data.data['state']['food'] < 2
+        # The food key for the Fresh Element represents grams left
+        return self.feeder_data.data['state']['food'] == 0
 
     @property
     def icon(self) -> str:
         """Set icon."""
-
         if self.feeder_data.type == 'd3':
             if self.feeder_data.data['state']['food'] < 2:
                 return 'mdi:food-drumstick-off'
             else:
                 return 'mdi:food-drumstick'
+        if self.feeder_data.data['state']['food'] == 0:
+            return 'mdi:food-drumstick-off'
+        else:
+            return 'mdi:food-drumstick'
 
-        if self.feeder_data.type != 'd3':
-            if self.feeder_data.data['state']['food'] == 0:
-                return 'mdi:food-drumstick-off'
-            else:
-                return 'mdi:food-drumstick'
 
-class BatteryInstalled(CoordinatorEntity, BinarySensorEntity):
+class BatteryInstalled(PetKitFeederEntity, BinarySensorEntity):
     """Representation of if Feeder has batteries installed."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:battery'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_battery_installed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "battery_installed"
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
+        super().__init__(coordinator, feeder_id, "battery_installed")
 
     @property
     def is_on(self) -> bool:
         """Return True if battery installed."""
-
-        if self.feeder_data.data['state']['batteryPower'] == 1:
-            return True
-        else:
-            return False
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:battery'
+        return self.feeder_data.data['state']['batteryPower'] == 1
 
 
-class BatteryCharging(CoordinatorEntity, BinarySensorEntity):
+class BatteryCharging(PetKitFeederEntity, BinarySensorEntity):
     """Representation of if Feeder battery is charging."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
+    _attr_icon = 'mdi:battery'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_battery_charging'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "battery_charging")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "battery"
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.BATTERY_CHARGING
 
     @property
     def is_on(self) -> bool:
         """Return True if battery is charging."""
-
-        if self.feeder_data.data['state']['charge'] > 1:
-            return True
-        else:
-            return False
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:battery'
+        return self.feeder_data.data['state']['charge'] > 1
 
 
-class LBBinFull(CoordinatorEntity, BinarySensorEntity):
+class LBBinFull(PetKitLitterBoxEntity, BinarySensorEntity):
     """Representation of litter box wastebin full or not."""
 
+    _attr_icon = 'mdi:delete'
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_wastebin'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "wastebin"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:delete'
-
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.PROBLEM
+        super().__init__(coordinator, lb_id, "wastebin")
 
     @property
     def is_on(self) -> bool:
         """Return True if wastebin is full."""
-
         return self.lb_data.device_detail['state']['boxFull']
 
 
-class LBLitterLack(CoordinatorEntity, BinarySensorEntity):
+class LBLitterLack(PetKitLitterBoxEntity, BinarySensorEntity):
     """Representation of litter box lacking sand."""
 
+    _attr_icon = 'mdi:landslide'
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_litter_lack'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, lb_id, "litter_lack")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "litter"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:landslide'
-
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.PROBLEM
 
     @property
     def is_on(self) -> bool:
         """Return True if litter is empty."""
-
         return self.lb_data.device_detail['state']['sandLack']
 
 
-class LBDeodorizerLack(CoordinatorEntity, BinarySensorEntity):
+class LBDeodorizerLack(PetKitLitterBoxEntity, BinarySensorEntity):
     """Representation of litter box lacking deodorizer."""
 
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_deodorizer_lack'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, lb_id, "deodorizer_lack")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         #Pura Air
         if 'k3Device' in self.lb_data.device_detail:
             return "pura_air_liquid"
@@ -540,7 +219,6 @@ class LBDeodorizerLack(CoordinatorEntity, BinarySensorEntity):
     @property
     def icon(self) -> str:
         """Set icon."""
-
         #Pura Air
         if 'k3Device' in self.lb_data.device_detail:
             return 'mdi:cup'
@@ -549,15 +227,8 @@ class LBDeodorizerLack(CoordinatorEntity, BinarySensorEntity):
             return 'mdi:spray'
 
     @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.PROBLEM
-
-    @property
     def is_on(self) -> bool:
         """Return True if deodorizer is empty."""
-
         return self.lb_data.device_detail['state']['liquidLack']
 
     @property
@@ -567,208 +238,75 @@ class LBDeodorizerLack(CoordinatorEntity, BinarySensorEntity):
         Return true if there is a Pura Air
         device associated or this is a Pura X.
         """
-
         if self.lb_data.type == 't4':
-            if 'k3Device' in self.lb_data.device_detail:
-                return True
-            else:
-                return False
+            return 'k3Device' in self.lb_data.device_detail
         else:
             return True
 
 
-class LBManuallyPaused(CoordinatorEntity, BinarySensorEntity):
+class LBManuallyPaused(PetKitLitterBoxEntity, BinarySensorEntity):
     """Representation of if litter box is manually paused by user."""
 
+    _attr_icon = 'mdi:pause'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_manually_paused'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "manually_paused"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:pause'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
+        super().__init__(coordinator, lb_id, "manually_paused")
 
     @property
     def is_on(self) -> bool:
-        """Return True if deodorizer is empty."""
-
+        """Return True if manually paused."""
         return self.lb_data.manually_paused
 
 
-class FoodLevelHopper1(CoordinatorEntity, BinarySensorEntity):
+class FoodLevelHopper1(PetKitFeederEntity, BinarySensorEntity):
     """Representation of Feeder lack of food warning for Hopper 1."""
 
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_food_level_hopper_1'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "food_level_hopper_1")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "food_level_hopper_one"
-
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.PROBLEM
 
     @property
     def is_on(self) -> bool:
         """Return True if food needs to be added."""
-
-        if self.feeder_data.data['state']['food1'] < 1:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['food1'] < 1
 
     @property
     def icon(self) -> str:
         """Set icon."""
-
         if self.feeder_data.data['state']['food1'] == 0:
             return 'mdi:food-drumstick-off'
         else:
             return 'mdi:food-drumstick'
 
 
-class FoodLevelHopper2(CoordinatorEntity, BinarySensorEntity):
+class FoodLevelHopper2(PetKitFeederEntity, BinarySensorEntity):
     """Representation of Feeder lack of food warning for Hopper 2."""
 
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_food_level_hopper_2'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "food_level_hopper_2")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "food_level_hopper_two"
-
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return entity device class."""
-
-        return BinarySensorDeviceClass.PROBLEM
 
     @property
     def is_on(self) -> bool:
         """Return True if food needs to be added."""
-
-        if self.feeder_data.data['state']['food2'] < 1:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['food2'] < 1
 
     @property
     def icon(self) -> str:
         """Set icon."""
-
         if self.feeder_data.data['state']['food2'] == 0:
             return 'mdi:food-drumstick-off'
         else:

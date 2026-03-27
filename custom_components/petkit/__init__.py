@@ -9,42 +9,35 @@ from homeassistant.helpers import device_registry as dr
 from .const import (
     DOMAIN,
     LOGGER,
-    PETKIT_COORDINATOR,
     PLATFORMS,
     POLLING_INTERVAL,
     REGION,
     TIMEZONE,
-    UPDATE_LISTENER,
     USE_BLE_RELAY,
 )
 from .coordinator import PetKitDataUpdateCoordinator
 
+type PetKitConfigEntry = ConfigEntry[PetKitDataUpdateCoordinator]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+
+async def async_setup_entry(hass: HomeAssistant, entry: PetKitConfigEntry) -> bool:
     """Set up PetKit from a config entry."""
 
     coordinator = PetKitDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        PETKIT_COORDINATOR: coordinator
-    }
+    entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    update_listener = entry.add_update_listener(async_update_options)
-    hass.data[DOMAIN][entry.entry_id][UPDATE_LISTENER] = update_listener
+    entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: PetKitConfigEntry) -> bool:
     """Unload PetKit config entry."""
 
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        del hass.data[DOMAIN][entry.entry_id]
-        if not hass.data[DOMAIN]:
-            del hass.data[DOMAIN]
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old entry."""
@@ -52,12 +45,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.version in [1, 2, 3]:
         email = entry.data[CONF_EMAIL]
         password = entry.data[CONF_PASSWORD]
-        if POLLING_INTERVAL in entry.options:
-            polling_interval = entry.options[POLLING_INTERVAL]
-        else:
-            polling_interval = 120
+        polling_interval = entry.options.get(POLLING_INTERVAL, 120)
 
-        LOGGER.debug('Migrating PetKit config entry')
+        LOGGER.debug('Migrating PetKit config entry from version %s', entry.version)
 
         hass.config_entries.async_update_entry(
             entry,
@@ -79,13 +69,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         email = entry.data[CONF_EMAIL]
         password = entry.data[CONF_PASSWORD]
         region = entry.options[REGION]
-        if TIMEZONE in entry.options:
-            timezone = entry.options[TIMEZONE]
-        else:
-            timezone = "Set Automatically"
+        timezone = entry.options.get(TIMEZONE, "Set Automatically")
         polling_interval = entry.options[POLLING_INTERVAL]
 
-        LOGGER.debug('Migrating PetKit config entry')
+        LOGGER.debug('Migrating PetKit config entry from version %s', entry.version)
 
         hass.config_entries.async_update_entry(
             entry,
@@ -104,14 +91,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     return True
 
-async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """ Update options. """
+async def async_update_options(hass: HomeAssistant, entry: PetKitConfigEntry) -> None:
+    """Update options."""
 
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_remove_config_entry_device(
-    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
+    hass: HomeAssistant, config_entry: PetKitConfigEntry, device_entry: dr.DeviceEntry
 ) -> bool:
     """Remove a config entry from a device."""
     return True
-

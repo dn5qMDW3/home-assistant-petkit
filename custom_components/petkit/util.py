@@ -1,8 +1,7 @@
 """Utilities for PetKit Integration"""
 from __future__ import annotations
 
-from typing import Any
-import async_timeout
+from asyncio import timeout
 
 from petkitaio import PetKitClient
 from petkitaio.exceptions import AuthError, PetKitError, RegionError, ServerError, TimezoneError
@@ -37,26 +36,32 @@ async def async_validate_api(
     )
     client.use_ble_relay = use_ble_relay
     try:
-        async with async_timeout.timeout(TIMEOUT):
+        async with timeout(TIMEOUT):
             devices_query = await client.get_device_rosters()
     except AuthError as err:
-        LOGGER.error(f'Could not authenticate on PetKit servers: {err}')
-        raise AuthError(err)
-    except TimezoneError:
-        error = 'A timezone could not be found. If you are running Home Assistant as a standalone Docker container, you must define the TZ environmental variable. If the TZ variable is defined or you are running Home Assistant OS, your timezone was not found in the tzlocal library - Please manually select a timezone during setup.'
-        LOGGER.error(f'{error}')
-        raise TimezoneError(error)
+        LOGGER.error('Could not authenticate on PetKit servers: %s', err)
+        raise AuthError(err) from err
+    except TimezoneError as err:
+        error = (
+            'A timezone could not be found. If you are running Home Assistant '
+            'as a standalone Docker container, you must define the TZ '
+            'environmental variable. If the TZ variable is defined or you are '
+            'running Home Assistant OS, your timezone was not found in the '
+            'tzlocal library - Please manually select a timezone during setup.'
+        )
+        LOGGER.error(error)
+        raise TimezoneError(error) from err
     except ServerError as err:
-        LOGGER.error(f'PetKit servers are busy.Please try again later.')
-        raise ServerError(err)
+        LOGGER.error('PetKit servers are busy. Please try again later.')
+        raise ServerError(err) from err
     except RegionError as err:
-        LOGGER.error(f'{err}')
-        raise RegionError(err)
+        LOGGER.error('Region error: %s', err)
+        raise RegionError(err) from err
     except PetKitError as err:
-        LOGGER.error(f'Unknown PetKit Error: {err}')
-        raise PetKitError(err)
+        LOGGER.error('Unknown PetKit Error: %s', err)
+        raise PetKitError(err) from err
     except PETKIT_ERRORS as err:
-        LOGGER.error(f'Failed to get information from PetKit servers: {err}')
+        LOGGER.error('Failed to get information from PetKit servers: %s', err)
         raise ConnectionError from err
 
     devices = sum(len(value['result']['devices']) for value in devices_query.values())

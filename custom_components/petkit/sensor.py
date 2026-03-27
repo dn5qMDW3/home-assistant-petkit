@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from math import floor as floor
+from math import floor
 from typing import Any
-
-from petkitaio.model import Feeder, LitterBox, Pet, Purifier, W5Fountain
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -26,18 +24,15 @@ from homeassistant.const import(
 from homeassistant.core import callback, HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
-from .const import (
-    DOMAIN,
-    FEEDERS,
-    LITTER_BOXES,
-    PETKIT_COORDINATOR,
-    PURIFIERS,
-    WATER_FOUNTAINS
-)
 from .coordinator import PetKitDataUpdateCoordinator
+from .entity import (
+    PetKitFeederEntity,
+    PetKitLitterBoxEntity,
+    PetKitPetEntity,
+    PetKitPurifierEntity,
+    PetKitWaterFountainEntity,
+)
 from .litter_events import (
     EVENT_DESCRIPTION,
     EVENT_TYPE_NAMED,
@@ -53,7 +48,7 @@ async def async_setup_entry(
 ) -> None:
     """Set Up PetKit Sensor Entities."""
 
-    coordinator: PetKitDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][PETKIT_COORDINATOR]
+    coordinator: PetKitDataUpdateCoordinator = entry.runtime_data
 
     sensors = []
 
@@ -176,48 +171,16 @@ async def async_setup_entry(
     async_add_entities(sensors)
 
 
-class WFEnergyUse(CoordinatorEntity, SensorEntity):
+class WFEnergyUse(PetKitWaterFountainEntity, SensorEntity):
     """Representation of energy used by water fountain today."""
 
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, wf_id):
-        super().__init__(coordinator)
-        self.wf_id = wf_id
-
-    @property
-    def wf_data(self) -> W5Fountain:
-        """Handle coordinator Water Fountain data"""
-
-        return self.coordinator.data.water_fountains[self.wf_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.wf_data.id)},
-            "name": self.wf_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": WATER_FOUNTAINS.get(self.wf_data.data["typeCode"], "Unidentified Water Fountain") if "typeCode" in self.wf_data.data else "Unidentified Water Fountain",
-            "sw_version": f'{self.wf_data.data["hardware"]}.{self.wf_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.wf_data.id) + '_energy_usage'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "energy_usage"
+        super().__init__(coordinator, wf_id, "energy_usage")
 
     @property
     def native_value(self) -> float:
@@ -227,71 +190,19 @@ class WFEnergyUse(CoordinatorEntity, SensorEntity):
         energy_usage = round(((0.75 * todayPumpRunTime) / 3600000), 4)
         return energy_usage
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfEnergy:
-        """Return kWh as the native unit."""
 
-        return UnitOfEnergy.KILO_WATT_HOUR
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """Return entity device class."""
-
-        return SensorDeviceClass.ENERGY
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.TOTAL
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-class WFLastUpdate(CoordinatorEntity, SensorEntity):
+class WFLastUpdate(PetKitWaterFountainEntity, SensorEntity):
     """Representation of time water fountain data was last updated."""
 
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, wf_id):
-        super().__init__(coordinator)
-        self.wf_id = wf_id
-
-    @property
-    def wf_data(self) -> W5Fountain:
-        """Handle coordinator Water Fountain data"""
-
-        return self.coordinator.data.water_fountains[self.wf_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.wf_data.id)},
-            "name": self.wf_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": WATER_FOUNTAINS.get(self.wf_data.data["typeCode"], "Unidentified Water Fountain") if "typeCode" in self.wf_data.data else "Unidentified Water Fountain",
-            "sw_version": f'{self.wf_data.data["hardware"]}.{self.wf_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.wf_data.id) + '_last_update'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, wf_id, "last_update")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "last_data_update"
 
     @property
@@ -307,18 +218,6 @@ class WFLastUpdate(CoordinatorEntity, SensorEntity):
         return datetime.fromisoformat(last_update.replace('.000Z', '+00:00'))
 
     @property
-    def device_class(self) -> SensorDeviceClass:
-        """Return entity device class."""
-
-        return SensorDeviceClass.TIMESTAMP
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
     def available(self) -> bool:
         """Determine if device is available.
 
@@ -326,52 +225,21 @@ class WFLastUpdate(CoordinatorEntity, SensorEntity):
         in the updateAt key.
         """
 
-        if self.wf_data.data['updateAt']:
-            return True
-        else:
-            return False
+        return bool(self.wf_data.data['updateAt'])
 
-class WFFilter(CoordinatorEntity, SensorEntity):
+
+class WFFilter(PetKitWaterFountainEntity, SensorEntity):
     """Representation of water fountain filter percentage left."""
 
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
     def __init__(self, coordinator, wf_id):
-        super().__init__(coordinator)
-        self.wf_id = wf_id
-
-    @property
-    def wf_data(self) -> W5Fountain:
-        """Handle coordinator Water Fountain data"""
-
-        return self.coordinator.data.water_fountains[self.wf_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.wf_data.id)},
-            "name": self.wf_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": WATER_FOUNTAINS.get(self.wf_data.data["typeCode"], "Unidentified Water Fountain") if "typeCode" in self.wf_data.data else "Unidentified Water Fountain",
-            "sw_version": f'{self.wf_data.data["hardware"]}.{self.wf_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.wf_data.id) + '_filter_percent'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, wf_id, "filter_percent")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "filter"
 
     @property
@@ -379,18 +247,6 @@ class WFFilter(CoordinatorEntity, SensorEntity):
         """Return current filter percent left."""
 
         return self.wf_data.data['filterPercent']
-
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """Return percent as the native unit."""
-
-        return PERCENTAGE
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
 
     @property
     def icon(self) -> str:
@@ -401,47 +257,20 @@ class WFFilter(CoordinatorEntity, SensorEntity):
         else:
             return 'mdi:filter'
 
-class WFPurifiedWater(CoordinatorEntity, SensorEntity):
+
+class WFPurifiedWater(PetKitWaterFountainEntity, SensorEntity):
     """Representation of amount of times water has been purified today"""
 
+    _attr_icon = 'mdi:water-pump'
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, wf_id):
-        super().__init__(coordinator)
-        self.wf_id = wf_id
-
-    @property
-    def wf_data(self) -> W5Fountain:
-        """Handle coordinator Water Fountain data"""
-
-        return self.coordinator.data.water_fountains[self.wf_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.wf_data.id)},
-            "name": self.wf_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": WATER_FOUNTAINS.get(self.wf_data.data["typeCode"], "Unidentified Water Fountain") if "typeCode" in self.wf_data.data else "Unidentified Water Fountain",
-            "sw_version": f'{self.wf_data.data["hardware"]}.{self.wf_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.wf_data.id) + '_purified_water'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, wf_id, "purified_water")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "purified_water_today"
 
     @property
@@ -453,65 +282,18 @@ class WFPurifiedWater(CoordinatorEntity, SensorEntity):
         purified_today =  int((f/f2))
         return purified_today
 
-    @property
-    def icon(self) -> str | None:
-        """Set icon."""
 
-        return 'mdi:water-pump'
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-class FeederStatus(CoordinatorEntity, SensorEntity):
+class FeederStatus(PetKitFeederEntity, SensorEntity):
     """Representation of feeder status."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_status'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "status")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "feeder_status"
 
     @property
@@ -529,12 +311,6 @@ class FeederStatus(CoordinatorEntity, SensorEntity):
             return None
 
     @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
     def icon(self) -> str | None:
         """Set status icon."""
 
@@ -548,47 +324,20 @@ class FeederStatus(CoordinatorEntity, SensorEntity):
         else:
             return None
 
-class FeederDesiccant(CoordinatorEntity, SensorEntity):
+
+class FeederDesiccant(PetKitFeederEntity, SensorEntity):
     """Representation of feeder desiccant days remaining."""
 
+    _attr_native_unit_of_measurement = UnitOfTime.DAYS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = 'mdi:air-filter'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_desiccant_days'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "desiccant_days")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "desiccant_days_remaining"
 
     @property
@@ -597,66 +346,14 @@ class FeederDesiccant(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['desiccantLeftDays']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfTime:
-        """Return days as the native unit."""
 
-        return UnitOfTime.DAYS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def icon(self) -> str | None:
-        """Set icon."""
-
-        return 'mdi:air-filter'
-
-class FeederBattStatus(CoordinatorEntity, SensorEntity):
+class FeederBattStatus(PetKitFeederEntity, SensorEntity):
     """Representation of feeder battery status."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_battery_status'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "battery_status"
+        super().__init__(coordinator, feeder_id, "battery_status")
 
     @property
     def native_value(self) -> str:
@@ -667,12 +364,6 @@ class FeederBattStatus(CoordinatorEntity, SensorEntity):
             return "normal"
         else:
             return "low"
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
 
     @property
     def icon(self) -> str:
@@ -691,52 +382,23 @@ class FeederBattStatus(CoordinatorEntity, SensorEntity):
         When Battery isn't being used the level is always 0
         """
 
-        if self.feeder_data.data['state']['pim'] == 2:
-            return True
-        else:
-            return False
+        return self.feeder_data.data['state']['pim'] == 2
 
-class TotalDispensed(CoordinatorEntity, SensorEntity):
+
+class TotalDispensed(PetKitFeederEntity, SensorEntity):
     """Representation of feeder total food dispensed."""
 
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_total_dispensed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "total_dispensed")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "dispensed"
 
     @property
@@ -745,71 +407,21 @@ class TotalDispensed(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['realAmountTotal']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams as the native unit."""
 
-        return UnitOfMass.GRAMS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.TOTAL_INCREASING
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-class TotalPlanned(CoordinatorEntity, SensorEntity):
+class TotalPlanned(PetKitFeederEntity, SensorEntity):
     """Representation of feeder total planned to be dispensed."""
 
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_total_planned'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "total_planned")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "planned"
 
     @property
@@ -818,72 +430,17 @@ class TotalPlanned(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['planAmountTotal']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams as the native unit."""
 
-        return UnitOfMass.GRAMS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-class PlannedDispensed(CoordinatorEntity, SensorEntity):
+class PlannedDispensed(PetKitFeederEntity, SensorEntity):
     """Representation of feeder planned that has been dispensed."""
 
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_planned_dispensed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "planned_dispensed"
+        super().__init__(coordinator, feeder_id, "planned_dispensed")
 
     @property
     def native_value(self) -> int:
@@ -891,71 +448,21 @@ class PlannedDispensed(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['planRealAmountTotal']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams as the native unit."""
 
-        return UnitOfMass.GRAMS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.TOTAL_INCREASING
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-class ManualDispensed(CoordinatorEntity, SensorEntity):
+class ManualDispensed(PetKitFeederEntity, SensorEntity):
     """Representation of feeder amount that has been manually dispensed."""
 
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_manual_dispensed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "manual_dispensed")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "manually_dispensed"
 
     @property
@@ -964,72 +471,16 @@ class ManualDispensed(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['addAmountTotal']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams as the native unit."""
 
-        return UnitOfMass.GRAMS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-class TimesDispensed(CoordinatorEntity, SensorEntity):
+class TimesDispensed(PetKitFeederEntity, SensorEntity):
     """Representation of feeder amount of times food has been dispensed."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_times_dispensed'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "times_dispensed"
+        super().__init__(coordinator, feeder_id, "times_dispensed")
 
     @property
     def native_value(self) -> int:
@@ -1040,65 +491,22 @@ class TimesDispensed(CoordinatorEntity, SensorEntity):
         else:
             return self.feeder_data.data['state']['feedState']['times']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-class FeederRSSI(CoordinatorEntity, SensorEntity):
+class FeederRSSI(PetKitFeederEntity, SensorEntity):
     """Representation of feeder WiFi connection strength."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+    _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+    _attr_icon = 'mdi:wifi'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_feeder_rssi'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "feeder_rssi")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "rssi"
 
     @property
@@ -1107,79 +515,17 @@ class FeederRSSI(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['wifi']['rsq']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """Return dBm as the native unit."""
-
-        return SIGNAL_STRENGTH_DECIBELS_MILLIWATT
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """Return entity device class."""
-
-        return SensorDeviceClass.SIGNAL_STRENGTH
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:wifi'
-
-
-class AmountEaten(CoordinatorEntity, SensorEntity):
+class AmountEaten(PetKitFeederEntity, SensorEntity):
     """Representation of amount eaten by pet today."""
 
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_amount_eaten'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "amount_eaten"
+        super().__init__(coordinator, feeder_id, "amount_eaten")
 
     @property
     def native_value(self) -> int:
@@ -1187,73 +533,16 @@ class AmountEaten(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['eatAmountTotal']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams as the native unit."""
 
-        return UnitOfMass.GRAMS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class TimesEaten(CoordinatorEntity, SensorEntity):
+class TimesEaten(PetKitFeederEntity, SensorEntity):
     """Representation of amount of times pet ate today."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_times_eaten'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "times_eaten"
+        super().__init__(coordinator, feeder_id, "times_eaten")
 
     @property
     def native_value(self) -> int:
@@ -1264,67 +553,17 @@ class TimesEaten(CoordinatorEntity, SensorEntity):
         else:
             return len(self.feeder_data.data['state']['feedState']['eatTimes'])
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class FoodInBowl(CoordinatorEntity, SensorEntity):
+class FoodInBowl(PetKitFeederEntity, SensorEntity):
     """Representation of amount of food in D3 feeder bowl."""
 
+    _attr_native_unit_of_measurement = UnitOfMass.GRAMS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_food_in_bowl'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "food_in_bowl"
+        super().__init__(coordinator, feeder_id, "food_in_bowl")
 
     @property
     def native_value(self) -> int:
@@ -1332,72 +571,19 @@ class FoodInBowl(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['weight']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return grams as the native unit."""
 
-        return UnitOfMass.GRAMS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class FeederError(CoordinatorEntity, SensorEntity):
+class FeederError(PetKitFeederEntity, SensorEntity):
     """Representation of D3 feeder error."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:alert-circle'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_feeder_error'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "feeder_error")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "error"
 
     @property
@@ -1409,55 +595,15 @@ class FeederError(CoordinatorEntity, SensorEntity):
         else:
             return 'no_error'
 
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
 
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:alert-circle'
-
-
-class LBDeodorizerLevel(CoordinatorEntity, SensorEntity):
+class LBDeodorizerLevel(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box deodorizer left."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_deodorizer_level'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, lb_id, "deodorizer_level")
 
     @property
     def translation_key(self) -> str:
@@ -1494,18 +640,6 @@ class LBDeodorizerLevel(CoordinatorEntity, SensorEntity):
             return self.lb_data.device_detail['state']['liquid']
 
     @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
     def native_unit_of_measurement(self) -> str | UnitOfTime:
         """Return percent or days as the native unit."""
 
@@ -1516,54 +650,17 @@ class LBDeodorizerLevel(CoordinatorEntity, SensorEntity):
         else:
             return PERCENTAGE
 
-class LBLitterLevel(CoordinatorEntity, SensorEntity):
+
+class LBLitterLevel(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box litter percentage left."""
 
+    _attr_icon = 'mdi:landslide'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_litter_level'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "litter_level"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:landslide'
+        super().__init__(coordinator, lb_id, "litter_level")
 
     @property
     def native_value(self) -> int:
@@ -1571,73 +668,18 @@ class LBLitterLevel(CoordinatorEntity, SensorEntity):
 
         return self.lb_data.device_detail['state']['sandPercent']
 
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
 
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """Return percent as the native unit."""
-
-        return PERCENTAGE
-
-
-class LBLitterWeight(CoordinatorEntity, SensorEntity):
+class LBLitterWeight(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box litter weight."""
 
+    _attr_icon = 'mdi:landslide'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfMass.KILOGRAMS
+    _attr_device_class = SensorDeviceClass.WEIGHT
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_litter_weight'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "litter_weight"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:landslide'
+        super().__init__(coordinator, lb_id, "litter_weight")
 
     @property
     def native_value(self) -> float:
@@ -1645,79 +687,18 @@ class LBLitterWeight(CoordinatorEntity, SensorEntity):
 
         return round((self.lb_data.device_detail['state']['sandWeight'] / 1000), 1)
 
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
 
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return Kg as the native unit."""
-
-        return UnitOfMass.KILOGRAMS
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """Return entity device class."""
-
-        return SensorDeviceClass.WEIGHT
-
-
-class LBRSSI(CoordinatorEntity, SensorEntity):
+class LBRSSI(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box wifi strength."""
 
+    _attr_icon = 'mdi:wifi'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+    _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_rssi'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "rssi"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:wifi'
+        super().__init__(coordinator, lb_id, "rssi")
 
     @property
     def native_value(self) -> int:
@@ -1725,73 +706,15 @@ class LBRSSI(CoordinatorEntity, SensorEntity):
 
         return self.lb_data.device_detail['state']['wifi']['rsq']
 
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
 
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """Return dBm as the native unit."""
-
-        return SIGNAL_STRENGTH_DECIBELS_MILLIWATT
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """Return entity device class."""
-
-        return SensorDeviceClass.SIGNAL_STRENGTH
-
-
-class LBError(CoordinatorEntity, SensorEntity):
+class LBError(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box error."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:alert-circle'
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_error'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "error"
+        super().__init__(coordinator, lb_id, "error")
 
     @property
     def native_value(self) -> str:
@@ -1802,61 +725,15 @@ class LBError(CoordinatorEntity, SensorEntity):
         else:
             return 'no_error'
 
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
 
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:alert-circle'
-
-
-class LBTimesUsed(CoordinatorEntity, SensorEntity):
+class LBTimesUsed(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box usage count."""
 
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_icon = 'mdi:counter'
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_times_used'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "times_used"
+        super().__init__(coordinator, lb_id, "times_used")
 
     @property
     def native_value(self) -> int:
@@ -1864,61 +741,16 @@ class LBTimesUsed(CoordinatorEntity, SensorEntity):
 
         return self.lb_data.statistics['times']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.TOTAL
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:counter'
-
-
-class LBAverageUse(CoordinatorEntity, SensorEntity):
+class LBAverageUse(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box average usage."""
 
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = 'mdi:clock'
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_average_use'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "average_use"
+        super().__init__(coordinator, lb_id, "average_use")
 
     @property
     def native_value(self) -> int:
@@ -1926,67 +758,16 @@ class LBAverageUse(CoordinatorEntity, SensorEntity):
 
         return self.lb_data.statistics['avgTime']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfTime:
-        """Return seconds as the native unit."""
 
-        return UnitOfTime.SECONDS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:clock'
-
-
-class LBTotalUse(CoordinatorEntity, SensorEntity):
+class LBTotalUse(PetKitLitterBoxEntity, SensorEntity):
     """Representation of litter box total usage."""
 
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = 'mdi:clock'
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_total_use'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "total_use"
+        super().__init__(coordinator, lb_id, "total_use")
 
     @property
     def native_value(self) -> int:
@@ -1994,67 +775,14 @@ class LBTotalUse(CoordinatorEntity, SensorEntity):
 
         return self.lb_data.statistics['totalTime']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfTime:
-        """Return seconds as the native unit."""
 
-        return UnitOfTime.SECONDS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:clock'
-
-
-class LBLastUsedBy(CoordinatorEntity, SensorEntity):
+class LBLastUsedBy(PetKitLitterBoxEntity, SensorEntity):
     """Representation of last pet to use the litter box."""
 
+    _attr_icon = 'mdi:cat'
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_last_used_by'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "last_used_by"
+        super().__init__(coordinator, lb_id, "last_used_by")
 
     @property
     def native_value(self) -> str:
@@ -2069,56 +797,16 @@ class LBLastUsedBy(CoordinatorEntity, SensorEntity):
         else:
             return 'no_record_yet'
 
-    @property
-    def icon(self) -> str:
-        """Set icon."""
 
-        return 'mdi:cat'
-
-
-class LBLastEvent(CoordinatorEntity, SensorEntity):
+class LBLastEvent(PetKitLitterBoxEntity, SensorEntity):
     """Representation of Pura X last litter box event."""
 
+    _attr_icon = 'mdi:calendar'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
+        super().__init__(coordinator, lb_id, "last_event")
         self.sub_events = None
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_last_event'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "last_event"
 
     @property
     def native_value(self) -> str:
@@ -2142,18 +830,6 @@ class LBLastEvent(CoordinatorEntity, SensorEntity):
         return {
             'sub_events': self.sub_events
         }
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:calendar'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
 
     def result_to_description(self, event_type: int, record: dict[str, Any]) -> str:
         """Return a description of the last event"""
@@ -2231,53 +907,27 @@ class LBLastEvent(CoordinatorEntity, SensorEntity):
             event_list.append(description)
         return event_list
 
-class PetRecentWeight(CoordinatorEntity, RestoreSensor):
+
+class PetRecentWeight(PetKitPetEntity, RestoreSensor):
     """Representation of most recent weight measured by litter box."""
 
+    _attr_native_unit_of_measurement = UnitOfMass.KILOGRAMS
+    _attr_device_class = SensorDeviceClass.WEIGHT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
     def __init__(self, coordinator, pet_id):
-        super().__init__(coordinator)
-        self.pet_id = pet_id
-
-    @property
-    def pet_data(self) -> Pet:
-        """Handle coordinator Pet data."""
-
-        return self.coordinator.data.pets[self.pet_id]
-
-    @property
-    def litter_boxes(self) -> dict[LitterBox, Any]:
-        """Handle coordinator Litter Boxes data."""
-
-        return self.coordinator.data.litter_boxes
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.pet_data.id)},
-            "name": self.pet_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": self.pet_data.type,
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return self.pet_data.id + '_recent_weight'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, pet_id, "recent_weight")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "latest_weight"
+
+    @property
+    def litter_boxes(self) -> dict:
+        """Handle coordinator Litter Boxes data."""
+
+        return self.coordinator.data.litter_boxes
 
     @property
     def entity_picture(self) -> str | None:
@@ -2296,24 +946,6 @@ class PetRecentWeight(CoordinatorEntity, RestoreSensor):
             return None
         else:
             return 'mdi:weight'
-
-    @property
-    def native_unit_of_measurement(self) -> UnitOfMass:
-        """Return kilograms as the native unit."""
-
-        return UnitOfMass.KILOGRAMS
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """Return entity device class."""
-
-        return SensorDeviceClass.WEIGHT
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -2361,53 +993,20 @@ class PetRecentWeight(CoordinatorEntity, RestoreSensor):
         return sorted_dict
 
 
-class PetLastUseDuration(CoordinatorEntity, RestoreSensor):
+class PetLastUseDuration(PetKitPetEntity, RestoreSensor):
     """Representation of most recent litter box use duration."""
 
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
     def __init__(self, coordinator, pet_id):
-        super().__init__(coordinator)
-        self.pet_id = pet_id
+        super().__init__(coordinator, pet_id, "last_use_duration")
 
     @property
-    def pet_data(self) -> Pet:
-        """Handle coordinator Pet data."""
-
-        return self.coordinator.data.pets[self.pet_id]
-
-    @property
-    def litter_boxes(self) -> dict[LitterBox, Any]:
+    def litter_boxes(self) -> dict:
         """Handle coordinator Litter Boxes data."""
 
         return self.coordinator.data.litter_boxes
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.pet_data.id)},
-            "name": self.pet_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": self.pet_data.type,
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return self.pet_data.id + '_last_use_duration'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "last_use_duration"
 
     @property
     def entity_picture(self) -> str | None:
@@ -2426,18 +1025,6 @@ class PetLastUseDuration(CoordinatorEntity, RestoreSensor):
             return None
         else:
             return 'mdi:clock'
-
-    @property
-    def native_unit_of_measurement(self) -> UnitOfTime:
-        """Return seconds as the native unit."""
-
-        return UnitOfTime.SECONDS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -2485,48 +1072,16 @@ class PetLastUseDuration(CoordinatorEntity, RestoreSensor):
         return sorted_dict
 
 
-class PuraAirBattery(CoordinatorEntity, SensorEntity):
+class PuraAirBattery(PetKitLitterBoxEntity, SensorEntity):
     """Representation of Pura Air battery level."""
 
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_device_class = SensorDeviceClass.BATTERY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_pura_air_battery'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "pura_air_battery"
+        super().__init__(coordinator, lb_id, "pura_air_battery")
 
     @property
     def native_value(self) -> int:
@@ -2535,30 +1090,6 @@ class PuraAirBattery(CoordinatorEntity, SensorEntity):
         return self.lb_data.device_detail['k3Device']['battery']
 
     @property
-    def native_unit_of_measurement(self) -> str:
-        """Return % as the native unit."""
-
-        return PERCENTAGE
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """ Return entity device class """
-
-        return SensorDeviceClass.BATTERY
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
     def available(self) -> bool:
         """Determine if device is available.
 
@@ -2566,54 +1097,19 @@ class PuraAirBattery(CoordinatorEntity, SensorEntity):
         device associated.
         """
 
-        if 'k3Device' in self.lb_data.device_detail:
-            return True
-        else:
-            return False
+        return 'k3Device' in self.lb_data.device_detail
 
 
-class PuraAirLiquid(CoordinatorEntity, SensorEntity):
+class PuraAirLiquid(PetKitLitterBoxEntity, SensorEntity):
     """Representation of Pura Air liquid level."""
 
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = 'mdi:cup'
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_pura_air_liquid'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "pura_air_liquid"
+        super().__init__(coordinator, lb_id, "pura_air_liquid")
 
     @property
     def native_value(self) -> int:
@@ -2622,30 +1118,6 @@ class PuraAirLiquid(CoordinatorEntity, SensorEntity):
         return self.lb_data.device_detail['k3Device']['liquid']
 
     @property
-    def native_unit_of_measurement(self) -> str:
-        """Return % as the native unit."""
-
-        return PERCENTAGE
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def icon(self) -> str:
-        """Return icon for entity."""
-
-        return 'mdi:cup'
-
-    @property
     def available(self) -> bool:
         """Determine if device is available.
 
@@ -2653,55 +1125,18 @@ class PuraAirLiquid(CoordinatorEntity, SensorEntity):
         device associated.
         """
 
-        if 'k3Device' in self.lb_data.device_detail:
-            return True
-        else:
-            return False
+        return 'k3Device' in self.lb_data.device_detail
 
 
-class MAXLastEvent(CoordinatorEntity, SensorEntity):
+class MAXLastEvent(PetKitLitterBoxEntity, SensorEntity):
     """Representation of last Pura MAX litter box event."""
 
+    _attr_icon = 'mdi:calendar'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
+        super().__init__(coordinator, lb_id, "max_last_event")
         self.sub_events = None
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_max_last_event'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "max_last_event"
 
     @property
     def native_value(self) -> str:
@@ -2725,18 +1160,6 @@ class MAXLastEvent(CoordinatorEntity, SensorEntity):
         return {
             'sub_events': self.sub_events
         }
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:calendar'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
 
     def result_to_description(self, event_type: int, record: dict[str, Any]) -> str:
         """Return a description of the last event"""
@@ -2833,49 +1256,14 @@ class MAXLastEvent(CoordinatorEntity, SensorEntity):
         return event_list
 
 
-class MAXWorkState(CoordinatorEntity, SensorEntity):
+class MAXWorkState(PetKitLitterBoxEntity, SensorEntity):
     """Representation of current Pura MAX litter box state."""
 
+    _attr_icon = 'mdi:account-hard-hat'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
     def __init__(self, coordinator, lb_id):
-        super().__init__(coordinator)
-        self.lb_id = lb_id
-        self.sub_events = None
-
-    @property
-    def lb_data(self) -> LitterBox:
-        """Handle coordinator litter box data."""
-
-        return self.coordinator.data.litter_boxes[self.lb_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.lb_data.id)},
-            "name": self.lb_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": LITTER_BOXES[self.lb_data.type],
-            "sw_version": f'{self.lb_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.lb_data.id) + '_max_work_state'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "max_work_state"
+        super().__init__(coordinator, lb_id, "max_work_state")
 
     @property
     def native_value(self) -> str:
@@ -3016,61 +1404,17 @@ class MAXWorkState(CoordinatorEntity, SensorEntity):
         else:
             return 'idle'
 
-    @property
-    def icon(self) -> str:
-        """Set icon."""
 
-        return 'mdi:account-hard-hat'
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-
-class AvgEatingTime(CoordinatorEntity, SensorEntity):
+class AvgEatingTime(PetKitFeederEntity, SensorEntity):
     """Representation of average time pet spent eating."""
 
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:clock-digital'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_avg_eating_time'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "avg_eating_time"
+        super().__init__(coordinator, feeder_id, "avg_eating_time")
 
     @property
     def native_value(self) -> int:
@@ -3078,72 +1422,20 @@ class AvgEatingTime(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['eatAvg']
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfTime:
-        """Return seconds as the native unit."""
 
-        return UnitOfTime.SECONDS
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:clock-digital'
-
-
-class ManualDispensedHopper1(CoordinatorEntity, SensorEntity):
+class ManualDispensedHopper1(PetKitFeederEntity, SensorEntity):
     """Representation of feeder amount that has been manually dispensed from hopper 1."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_manual_dispensed_hopp_1'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "manual_dispensed_hopp_1")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "manually_dispensed_hopp_one"
 
     @property
@@ -3152,66 +1444,20 @@ class ManualDispensedHopper1(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['addAmountTotal1']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class ManualDispensedHopper2(CoordinatorEntity, SensorEntity):
+class ManualDispensedHopper2(PetKitFeederEntity, SensorEntity):
     """Representation of feeder amount that has been manually dispensed from hopper 2."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_manual_dispensed_hopp_2'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "manual_dispensed_hopp_2")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "manually_dispensed_hopp_two"
 
     @property
@@ -3220,65 +1466,20 @@ class ManualDispensedHopper2(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['addAmountTotal2']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-class TotalPlannedHopper1(CoordinatorEntity, SensorEntity):
+class TotalPlannedHopper1(PetKitFeederEntity, SensorEntity):
     """Representation of feeder total planned to be dispensed from hopper 1."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_total_planned_hopp_1'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "total_planned_hopp_1")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "planned_hopp_one"
 
     @property
@@ -3287,66 +1488,20 @@ class TotalPlannedHopper1(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['planAmountTotal1']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class TotalPlannedHopper2(CoordinatorEntity, SensorEntity):
+class TotalPlannedHopper2(PetKitFeederEntity, SensorEntity):
     """Representation of feeder total planned to be dispensed from hopper 2."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_total_planned_hopp_2'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "total_planned_hopp_2")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "planned_hopp_two"
 
     @property
@@ -3355,66 +1510,20 @@ class TotalPlannedHopper2(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['planAmountTotal2']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class PlannedDispensedHopper1(CoordinatorEntity, SensorEntity):
+class PlannedDispensedHopper1(PetKitFeederEntity, SensorEntity):
     """Representation of feeder planned that has been dispensed from hopper 1."""
 
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_planned_dispensed_hopp_1'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "planned_dispensed_hopp_1")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "planned_dispensed_hopp_one"
 
     @property
@@ -3423,66 +1532,20 @@ class PlannedDispensedHopper1(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['planRealAmountTotal1']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.TOTAL_INCREASING
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class PlannedDispensedHopper2(CoordinatorEntity, SensorEntity):
+class PlannedDispensedHopper2(PetKitFeederEntity, SensorEntity):
     """Representation of feeder planned that has been dispensed from hopper 2."""
 
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_planned_dispensed_hopp_2'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "planned_dispensed_hopp_2")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "planned_dispensed_hopp_two"
 
     @property
@@ -3491,66 +1554,20 @@ class PlannedDispensedHopper2(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['planRealAmountTotal2']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.TOTAL_INCREASING
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class TotalDispensedHopper1(CoordinatorEntity, SensorEntity):
+class TotalDispensedHopper1(PetKitFeederEntity, SensorEntity):
     """Representation of feeder total food dispensed from hopper 1."""
 
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_total_dispensed_hopp_1'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "total_dispensed_hopp_1")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "dispensed_hopp_one"
 
     @property
@@ -3559,66 +1576,20 @@ class TotalDispensedHopper1(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['realAmountTotal1']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.TOTAL_INCREASING
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class TotalDispensedHopper2(CoordinatorEntity, SensorEntity):
+class TotalDispensedHopper2(PetKitFeederEntity, SensorEntity):
     """Representation of feeder total food dispensed from hopper 2."""
 
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:food-drumstick'
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_total_dispensed_hopp_2'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, feeder_id, "total_dispensed_hopp_2")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "dispensed_hopp_two"
 
     @property
@@ -3627,66 +1598,19 @@ class TotalDispensedHopper2(CoordinatorEntity, SensorEntity):
 
         return self.feeder_data.data['state']['feedState']['realAmountTotal2']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.TOTAL_INCREASING
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
-
-
-class PurifierError(CoordinatorEntity, SensorEntity):
+class PurifierError(PetKitPurifierEntity, SensorEntity):
     """Representation of Purifier error."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = 'mdi:alert-circle'
+
     def __init__(self, coordinator, purifier_id):
-        super().__init__(coordinator)
-        self.purifier_id = purifier_id
-
-    @property
-    def purifier_data(self) -> Purifier:
-        """Handle coordinator Purifier data."""
-
-        return self.coordinator.data.purifiers[self.purifier_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.purifier_data.id)},
-            "name": self.purifier_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": PURIFIERS[self.purifier_data.type],
-            "sw_version": f'{self.purifier_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.purifier_data.id) + '_purifier_error'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, purifier_id, "purifier_error")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "error"
 
     @property
@@ -3698,60 +1622,20 @@ class PurifierError(CoordinatorEntity, SensorEntity):
         else:
             return 'no_error'
 
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
 
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:alert-circle'
-
-
-class PurifierHumidity(CoordinatorEntity, SensorEntity):
+class PurifierHumidity(PetKitPurifierEntity, SensorEntity):
     """ Representation of Purifier Humidity """
 
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_device_class = SensorDeviceClass.HUMIDITY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
     def __init__(self, coordinator, purifier_id):
-        super().__init__(coordinator)
-        self.purifier_id = purifier_id
-
-    @property
-    def purifier_data(self) -> Purifier:
-        """Handle coordinator Purifier data."""
-
-        return self.coordinator.data.purifiers[self.purifier_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.purifier_data.id)},
-            "name": self.purifier_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": PURIFIERS[self.purifier_data.type],
-            "sw_version": f'{self.purifier_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.purifier_data.id) + '_purifier_humidity'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, purifier_id, "purifier_humidity")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "humidity"
 
     @property
@@ -3760,66 +1644,20 @@ class PurifierHumidity(CoordinatorEntity, SensorEntity):
 
         return round((self.purifier_data.device_detail['state']['humidity'] / 10))
 
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """ Return percent as the native unit """
 
-        return PERCENTAGE
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """ Return entity device class """
-
-        return SensorDeviceClass.HUMIDITY
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """ Return the type of state class """
-
-        return SensorStateClass.MEASUREMENT
-
-
-class PurifierTemperature(CoordinatorEntity, SensorEntity):
+class PurifierTemperature(PetKitPurifierEntity, SensorEntity):
     """ Representation of Purifier Temperature """
 
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
     def __init__(self, coordinator, purifier_id):
-        super().__init__(coordinator)
-        self.purifier_id = purifier_id
-
-    @property
-    def purifier_data(self) -> Purifier:
-        """Handle coordinator Purifier data."""
-
-        return self.coordinator.data.purifiers[self.purifier_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.purifier_data.id)},
-            "name": self.purifier_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": PURIFIERS[self.purifier_data.type],
-            "sw_version": f'{self.purifier_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.purifier_data.id) + '_purifier_temperature'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
+        super().__init__(coordinator, purifier_id, "purifier_temperature")
 
     @property
     def translation_key(self) -> str:
         """Translation key for this entity."""
-
         return "temperature"
 
     @property
@@ -3828,67 +1666,16 @@ class PurifierTemperature(CoordinatorEntity, SensorEntity):
 
         return round((self.purifier_data.device_detail['state']['temp'] / 10))
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfTemperature:
-        """ Return Celsius as the native unit """
 
-        return UnitOfTemperature.CELSIUS
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """ Return entity device class """
-
-        return SensorDeviceClass.TEMPERATURE
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """ Return the type of state class """
-
-        return SensorStateClass.MEASUREMENT
-
-
-class AirPurified(CoordinatorEntity, SensorEntity):
+class AirPurified(PetKitPurifierEntity, SensorEntity):
     """ Representation of amount of air purified."""
 
+    _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
+    _attr_device_class = SensorDeviceClass.VOLUME
+    _attr_state_class = SensorStateClass.TOTAL
+
     def __init__(self, coordinator, purifier_id):
-        super().__init__(coordinator)
-        self.purifier_id = purifier_id
-
-    @property
-    def purifier_data(self) -> Purifier:
-        """Handle coordinator Purifier data."""
-
-        return self.coordinator.data.purifiers[self.purifier_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.purifier_data.id)},
-            "name": self.purifier_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": PURIFIERS[self.purifier_data.type],
-            "sw_version": f'{self.purifier_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.purifier_data.id) + '_air_purified'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "air_purified"
+        super().__init__(coordinator, purifier_id, "air_purified")
 
     @property
     def native_value(self) -> int:
@@ -3896,67 +1683,18 @@ class AirPurified(CoordinatorEntity, SensorEntity):
 
         return round(self.purifier_data.device_detail['state']['refresh'])
 
-    @property
-    def native_unit_of_measurement(self) -> UnitOfVolume:
-        """ Return cubic meters as the native unit """
 
-        return UnitOfVolume.CUBIC_METERS
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """ Return entity device class """
-
-        return SensorDeviceClass.VOLUME
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """ Return the type of state class """
-
-        return SensorStateClass.TOTAL
-
-
-class PurifierRSSI(CoordinatorEntity, SensorEntity):
+class PurifierRSSI(PetKitPurifierEntity, SensorEntity):
     """Representation of purifier WiFi connection strength."""
 
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+    _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+    _attr_icon = 'mdi:wifi'
+
     def __init__(self, coordinator, purifier_id):
-        super().__init__(coordinator)
-        self.purifier_id = purifier_id
-
-    @property
-    def purifier_data(self) -> Purifier:
-        """Handle coordinator Purifier data."""
-
-        return self.coordinator.data.purifiers[self.purifier_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.purifier_data.id)},
-            "name": self.purifier_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": PURIFIERS[self.purifier_data.type],
-            "sw_version": f'{self.purifier_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.purifier_data.id) + '_rssi'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "rssi"
+        super().__init__(coordinator, purifier_id, "rssi")
 
     @property
     def native_value(self) -> int:
@@ -3964,85 +1702,17 @@ class PurifierRSSI(CoordinatorEntity, SensorEntity):
 
         return self.purifier_data.device_detail['state']['wifi']['rsq']
 
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
 
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """Return dBm as the native unit."""
-
-        return SIGNAL_STRENGTH_DECIBELS_MILLIWATT
-
-    @property
-    def device_class(self) -> SensorDeviceClass:
-        """Return entity device class."""
-
-        return SensorDeviceClass.SIGNAL_STRENGTH
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:wifi'
-
-
-class PurifierLiquid(CoordinatorEntity, SensorEntity):
+class PurifierLiquid(PetKitPurifierEntity, SensorEntity):
     """Representation of purifier liquid left."""
 
+    _attr_icon = 'mdi:cup-water'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+
     def __init__(self, coordinator, purifier_id):
-        super().__init__(coordinator)
-        self.purifier_id = purifier_id
-
-    @property
-    def purifier_data(self) -> Purifier:
-        """Handle coordinator Purifier data."""
-
-        return self.coordinator.data.purifiers[self.purifier_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.purifier_data.id)},
-            "name": self.purifier_data.device_detail['name'],
-            "manufacturer": "PetKit",
-            "model": PURIFIERS[self.purifier_data.type],
-            "sw_version": f'{self.purifier_data.device_detail["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.purifier_data.id) + '_liquid'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "liquid"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:cup-water'
+        super().__init__(coordinator, purifier_id, "liquid")
 
     @property
     def native_value(self) -> int:
@@ -4050,94 +1720,20 @@ class PurifierLiquid(CoordinatorEntity, SensorEntity):
 
         return self.purifier_data.device_detail['state']['liquid']
 
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
 
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """Return percent as the native unit."""
-
-        return PERCENTAGE
-
-
-class FoodLeft(CoordinatorEntity, SensorEntity):
+class FoodLeft(PetKitFeederEntity, SensorEntity):
     """Representation of percent food left."""
 
+    _attr_icon = 'mdi:food-drumstick'
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+
     def __init__(self, coordinator, feeder_id):
-        super().__init__(coordinator)
-        self.feeder_id = feeder_id
-
-    @property
-    def feeder_data(self) -> Feeder:
-        """Handle coordinator Feeder data."""
-
-        return self.coordinator.data.feeders[self.feeder_id]
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device registry information for this entity."""
-
-        return {
-            "identifiers": {(DOMAIN, self.feeder_data.id)},
-            "name": self.feeder_data.data['name'],
-            "manufacturer": "PetKit",
-            "model": FEEDERS[self.feeder_data.type],
-            "sw_version": f'{self.feeder_data.data["firmware"]}'
-        }
-
-    @property
-    def unique_id(self) -> str:
-        """Sets unique ID for this entity."""
-
-        return str(self.feeder_data.id) + '_food_left'
-
-    @property
-    def has_entity_name(self) -> bool:
-        """Indicate that entity has name defined."""
-
-        return True
-
-    @property
-    def translation_key(self) -> str:
-        """Translation key for this entity."""
-
-        return "food_left"
-
-    @property
-    def icon(self) -> str:
-        """Set icon."""
-
-        return 'mdi:food-drumstick'
+        super().__init__(coordinator, feeder_id, "food_left")
 
     @property
     def native_value(self) -> int:
         """Return current percentage left"""
 
         return self.feeder_data.data['state']['percent']
-
-    @property
-    def entity_category(self) -> EntityCategory:
-        """Set category to diagnostic."""
-
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def state_class(self) -> SensorStateClass:
-        """Return the type of state class."""
-
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def native_unit_of_measurement(self) -> str:
-        """Return percent as the native unit."""
-
-        return PERCENTAGE

@@ -27,11 +27,9 @@ PLATFORMS = [
 
 DEFAULT_NAME = "PetKit"
 REGION = "region"
-PETKIT_COORDINATOR = "petkit_coordinator"
 POLLING_INTERVAL = "polling_interval"
 TIMEOUT = 20
 TIMEZONE = "timezone"
-UPDATE_LISTENER = "update_listener"
 USE_BLE_RELAY = "use_ble_relay"
 FAST_INTERVAL = timedelta(seconds=10)
 

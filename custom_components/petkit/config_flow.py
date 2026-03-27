@@ -108,9 +108,9 @@ class PetKitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input:
             email = user_input[CONF_EMAIL]
             password = user_input[CONF_PASSWORD]
-            region = user_input[REGION] if REGION else None
+            region = user_input.get(REGION)
             timezone = user_input[TIMEZONE]
-            use_ble_relay = user_input[USE_BLE_RELAY] if USE_BLE_RELAY in user_input else True
+            use_ble_relay = user_input.get(USE_BLE_RELAY, True)
 
             try:
                 await async_validate_api(
@@ -180,9 +180,9 @@ class PetKitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input:
             email = user_input[CONF_EMAIL]
             password = user_input[CONF_PASSWORD]
-            region = user_input[REGION] if REGION else None
+            region = user_input.get(REGION)
             timezone = user_input[TIMEZONE]
-            use_ble_relay = user_input[USE_BLE_RELAY] if USE_BLE_RELAY in user_input else True
+            use_ble_relay = user_input.get(USE_BLE_RELAY, True)
 
             try:
                 await async_validate_api(
